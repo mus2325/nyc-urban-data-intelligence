@@ -60,6 +60,8 @@ python -m unittest discover -v
 
 All nine tests passed in the development environment. They cover query construction, validation, duplicate prevention across runs, rollback, HTTP failure handling, and dashboard rendering and filters. The tests use mocked HTTP responses and temporary SQLite files, so they work offline after dependencies are installed.
 
-A live five-row request was attempted, but this cloud environment's HTTPS proxy returned HTTP 403 for `data.cityofnewyork.us` before reaching the API. The live sample remains unverified here. Run `python -m nyc311.etl --limit 5` from a network that allows the NYC Open Data endpoint to verify it.
+**Live local verification (November 19, 2026):** Running `python -m nyc311.etl --limit 50` on macOS successfully fetched 50 NYC 311 requests, rejected 0 invalid rows, removed 0 within-batch duplicates, and inserted 50 records into SQLite. The Streamlit dashboard showed 50 requests and its borough filter updated the charts correctly. All 9 unittest tests passed locally. The GitHub Actions `Python tests` CI job also succeeded for commit `d6ef4ac`. Earlier, the Codex cloud proxy blocked a direct NYC Open Data request (HTTP 403); this was a limitation of that environment, not the successful local run.
+
+**Known MVP limitations:** Each ETL run samples the latest requests rather than maintaining a historical cursor or backfill; existing IDs are preserved without updating changed source records. Charts reflect the stored sample, not all NYC requests. Future work will add incremental ingestion, upserts, and quality checks.
 
 See [the learning guide](LEARNING_GUIDE.md) for a macOS walkthrough and explanations of each stage. [NYC 311 dataset](https://data.cityofnewyork.us/d/erm2-nwe9)
