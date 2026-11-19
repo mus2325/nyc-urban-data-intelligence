@@ -22,7 +22,7 @@
 
    The virtual environment gives this project its own packages. Activate it when you open a new Terminal window. Use `deactivate` when you finish.
 
-4. Start small. Read the log messages for fetched, accepted, rejected, new, updated, and unchanged records.
+4. Try a single-page live check with `python -m nyc311.etl --validate-page --page-size 50`. This prints quality counts without opening your dashboard database. For a check against a known historical window, follow the [README example](README.md#validate-a-live-page-or-historical-window). Then run a full ingestion to populate the dashboard.
 
    ```bash
    python -m nyc311.etl --page-size 50
@@ -41,7 +41,7 @@
 
 1. **Extract.** An API is an interface programs can call over the network. Requests sends an HTTPS request to NYC Open Data. Each query asks for the dashboard fields and the system modification timestamp. The page size caps how many records each request returns. The response is JSON, which Python reads as a list of dictionaries.
 2. **Transform.** Pandas turns the dictionaries into a DataFrame, a table with named columns. The code trims text, parses local NYC timestamps, and rejects rows with unusable IDs, dates, or categories. It labels missing or unrecognized boroughs as `UNKNOWN` so those records still count.
-3. **Load.** SQLite stores the table in a file. The primary key makes each request ID unique even across multiple ETL runs. An upsert inserts a new ID or changes the stored version of an existing ID. A transaction saves the rows and checkpoint together. Replaying the same source version leaves the dashboard records unchanged, which is an example of idempotence.
+3. **Stage and load.** The pipeline writes each cleaned page to a temporary SQLite file. This is a work area on disk that holds the newest valid version of each ID. Even thousands of rows sharing a timestamp are cleaned one page at a time. Once every page succeeds, the pipeline streams staged rows into the dashboard database. The primary key makes each request ID unique even across multiple ETL runs. An upsert inserts a new ID or changes the stored version of an existing ID. A transaction saves the rows and checkpoint together. Replaying the same source version leaves the dashboard records unchanged, which is an example of idempotence.
 4. **Explore.** Streamlit reads the database and reruns the dashboard code when you change a filter. Pandas counts categories and boroughs and groups requests by day. The dashboard uses a read-only connection, so filtering has no effect on stored data.
 
 Logs explain what each ETL run did. Errors produce a nonzero exit code that a shell or future scheduler can detect. Git ignores the virtual environment and generated database because those are local artifacts.
@@ -50,7 +50,7 @@ Logs explain what each ETL run did. Errors produce a nonzero exit code that a sh
 
 Think of the watermark as the end time of the last fully scanned window. SQLite stores it as a checkpoint. Each run re-reads the 10 minutes before that time so a recently delayed row can still be collected. The scan uses the source's modification time to catch edits to older requests. The dashboard still uses creation time for its trends.
 
-Pagination splits large responses into pages. If the previous page ended at time 10:05 with ID 250, the next page can include IDs greater than 250 at 10:05, as well as requests modified later. Saving the checkpoint only after all pages are read and written lets a failed run retry the same range without leaving partial updates in SQLite.
+Pagination splits large responses into pages. If the previous page ended at time 10:05 with ID 250, the next page can include IDs greater than 250 at 10:05, as well as requests modified later. Saving the checkpoint only after all pages are read and written lets a failed run retry from its last successful checkpoint. When you stop a scan with **Control+C** or a page fails, the temporary staging file is cleaned up and the next run fetches those pages again.
 
 The first run has no checkpoint, so it starts one hour before the command runs. To retry a first run from the same starting point, choose a time with `--since` and reuse it until that run succeeds. For example, `--since 2026-11-19T21:00:00Z` selects 21:00 UTC. Omit this flag once there is a checkpoint. Each later run advances by at most a day, so catching up after a long break can take several runs.
 

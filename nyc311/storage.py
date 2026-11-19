@@ -1,6 +1,7 @@
 """Store and read cleaned requests in SQLite."""
 
 from contextlib import closing
+from collections.abc import Iterable
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -68,24 +69,47 @@ def checkpoint_from(connection: sqlite3.Connection) -> str | None:
     return None
 
 
+def ensure_incremental_schema(connection: sqlite3.Connection) -> None:
+    create_requests_table(connection)
+    columns = {column[1] for column in connection.execute("PRAGMA table_info(requests)")}
+    if SOURCE_TIMESTAMP not in columns:
+        connection.execute("ALTER TABLE requests ADD COLUMN source_updated_at TEXT")
+
+
+def stage_page(connection: sqlite3.Connection, records: pd.DataFrame) -> None:
+    """Keep only the newest valid version of each ID in disk-backed staging."""
+    with connection:
+        connection.executemany("""
+            INSERT INTO requests
+                (unique_key, created_date, complaint_type, borough, source_updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(unique_key) DO UPDATE SET
+                created_date = excluded.created_date,
+                complaint_type = excluded.complaint_type,
+                borough = excluded.borough,
+                source_updated_at = excluded.source_updated_at
+            WHERE excluded.source_updated_at > requests.source_updated_at
+        """, records[[*FIELDS, SOURCE_TIMESTAMP]].itertuples(index=False, name=None))
+
+
 def commit_ingestion(
-    db_path: Path, records: pd.DataFrame, previous: str | None, watermark: str, fetched: int
+    db_path: Path,
+    rows: Iterable[tuple],
+    previous: str | None,
+    watermark: str,
+    metrics: dict,
 ) -> dict:
     """Upsert data, quality counts, and the new checkpoint in one transaction."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics = {"fetched": fetched, "accepted": len(records), "rejected": fetched - len(records),
-               "new": 0, "updated": 0, "unchanged": 0}
+    metrics = {**metrics, "new": 0, "updated": 0, "unchanged": 0}
     with closing(sqlite3.connect(db_path)) as connection, connection:
         # Lock before checking state so two ingestion runs cannot commit out of order.
         connection.execute("BEGIN IMMEDIATE")
         if checkpoint_from(connection) != previous:
             raise ValueError("The checkpoint changed during ingestion. Rerun from the new checkpoint.")
-        create_requests_table(connection)
-        columns = {column[1] for column in connection.execute("PRAGMA table_info(requests)")}
-        if SOURCE_TIMESTAMP not in columns:
-            connection.execute("ALTER TABLE requests ADD COLUMN source_updated_at TEXT")
+        ensure_incremental_schema(connection)
 
-        for row in records[[*FIELDS, SOURCE_TIMESTAMP]].itertuples(index=False, name=None):
+        for row in rows:
             current = connection.execute(
                 "SELECT created_date, complaint_type, borough, source_updated_at "
                 "FROM requests WHERE unique_key = ?",

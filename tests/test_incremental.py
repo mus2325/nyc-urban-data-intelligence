@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -106,7 +107,9 @@ class IncrementalTests(unittest.TestCase):
             change("102", category=" "),
             change(timestamp="2025-01-15T11:58:00Z", category="Heat"),
         ])
-        counts = run_incremental(5, self.db, now=NOW)
+        payload = get.return_value.json.return_value
+        get.side_effect = [response(payload[:2]), response(payload[2:])]
+        counts = run_incremental(2, self.db, now=NOW)
         self.assertEqual((counts["fetched"], counts["accepted"], counts["rejected"]), (3, 1, 2))
         self.assertEqual(load_requests(self.db)["complaint_type"].tolist(), ["Heat"])
 
@@ -139,6 +142,16 @@ class IncrementalTests(unittest.TestCase):
         self.assertEqual(self.state(), before)
         self.assertEqual(load_requests(self.db)["unique_key"].tolist(), ["101"])
 
+        get.reset_mock()
+        get.side_effect = [response([change("102")]), response([])]
+        counts = run_incremental(1, self.db, now=next_run)
+        self.assertEqual(counts["new"], 1)
+        self.assertNotIn("unique_key::number >", get.call_args_list[0].kwargs["params"]["$where"])
+        self.assertEqual(read_checkpoint(self.db), utc_text(next_run))
+        get.side_effect = [response([change("102")]), response([])]
+        counts = run_incremental(1, self.db, now=next_run)
+        self.assertEqual((counts["new"], counts["unchanged"]), (0, 1))
+
     @patch("nyc311.extract.requests.get")
     def test_missing_source_timestamp_fails_without_checkpoint(self, get):
         get.return_value = response([request_row()])
@@ -164,3 +177,62 @@ class IncrementalTests(unittest.TestCase):
             run_incremental(5, self.db, now=NOW + timedelta(minutes=1))
         self.assertEqual(self.state(), before)
         self.assertEqual(load_requests(self.db)["unique_key"].tolist(), ["101"])
+
+    @patch("nyc311.extract.requests.get")
+    def test_dense_equal_timestamp_window_transforms_one_page_at_a_time(self, get):
+        total = 5_638
+        page_size = 100
+        cursors = []
+
+        def serve_page(_url, *, params, timeout):
+            match = re.search(r"unique_key::number > (\d+)", params["$where"])
+            after = int(match[1]) if match else 0
+            cursors.append(after)
+            return response([
+                change(str(key)) for key in range(after + 1, min(after + params["$limit"], total) + 1)
+            ])
+
+        get.side_effect = serve_page
+        with patch("nyc311.etl.clean_requests", wraps=clean_requests) as clean:
+            counts = run_incremental(page_size, self.db, now=NOW)
+            # The mock retains call arguments, so only this test accumulates input pages.
+            sizes = [len(call.args[0]) for call in clean.call_args_list]
+        self.assertEqual(sizes, [100] * 56 + [38])
+        self.assertEqual(cursors, list(range(0, total, page_size)))
+        self.assertEqual(counts["new"], total)
+        self.assertEqual(set(load_requests(self.db)["unique_key"]), {str(k) for k in range(1, total + 1)})
+
+    @patch("nyc311.extract.requests.get")
+    def test_validation_stops_after_one_full_page_and_leaves_target_untouched(self, get):
+        get.return_value = response([change()])
+        run_incremental(5, self.db, now=NOW)
+        before = self.state()
+        get.reset_mock()
+        get.return_value = response([change("102"), change("103")])
+        counts = run_incremental(
+            2, self.db, now=NOW, since=NOW - timedelta(minutes=6), until=NOW, validate_page=True
+        )
+        self.assertEqual(counts, {"fetched": 2, "accepted": 2, "rejected": 0})
+        get.assert_called_once()
+        self.assertEqual(self.state(), before)
+        self.assertEqual(load_requests(self.db)["unique_key"].tolist(), ["101"])
+
+        missing_db = self.db.with_name("missing.sqlite3")
+        run_incremental(2, missing_db, now=NOW, validate_page=True)
+        self.assertFalse(missing_db.exists())
+
+    @patch("nyc311.extract.requests.get")
+    def test_interrupted_first_scan_can_restart_with_explicit_time_bounds(self, get):
+        start = NOW - timedelta(minutes=5)
+        end = start + timedelta(seconds=1)
+        get.side_effect = [response([change()]), KeyboardInterrupt()]
+        with self.assertRaises(KeyboardInterrupt):
+            run_incremental(1, self.db, now=NOW, since=start, until=end)
+        self.assertFalse(self.db.exists())
+
+        get.side_effect = [response([change()]), response([])]
+        counts = run_incremental(1, self.db, now=NOW, since=start, until=end)
+        self.assertEqual(counts["new"], 1)
+        self.assertEqual(read_checkpoint(self.db), utc_text(end))
+        with self.assertRaisesRegex(ValueError, "behind the ingestion checkpoint"):
+            run_incremental(1, self.db, now=NOW, until=start)
