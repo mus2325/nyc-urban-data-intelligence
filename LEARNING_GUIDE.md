@@ -59,3 +59,11 @@ Run the ETL again, then repeat the query. Recent requests may have arrived in th
 If the dashboard says the database is missing, run the ETL first and check its output. If you see a proxy or connection error, check that your network allows access to `data.cityofnewyork.us`. You can still run the offline tests with installed dependencies.
 
 The [README architecture diagram and AWS mapping](README.md#architecture) show where the same responsibilities could live in a cloud design. This project needs only your computer and public NYC Open Data access.
+
+## See your tests run on GitHub
+
+Continuous integration (CI) runs automated checks as you develop. The [CI workflow](.github/workflows/ci.yml) runs when a pull request targeting `main` is opened, reopened, or updated with new commits. GitHub starts a fresh Ubuntu runner, checks out the proposed code, sets up Python 3.12, installs `requirements.txt`, and runs the same `python -m unittest discover -v` command you use locally.
+
+The tests simulate NYC Open Data responses and use temporary SQLite files. You can run CI without configuring an API key, repository secret, AWS account, or paid service.
+
+On GitHub, open the pull request and select **Checks** to see the **Python tests** job. Expand **Run tests** to see each result. If the job fails, open the failed step to see the error, fix it locally, and push another commit to the pull request branch. You can also find the run under the repository's **Actions** tab by selecting **CI**.
