@@ -221,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local NYC 311 database and SQLite sidecar files
+/data/*.sqlite3
+/data/*.sqlite3-*
