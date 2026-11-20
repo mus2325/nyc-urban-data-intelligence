@@ -10,7 +10,7 @@
    cd nyc-urban-data-intelligence
    ```
 
-   To try the branch during review, run `git fetch origin` and `git switch --track origin/feat/incremental-ingestion` once the branch is on GitHub.
+   To try the branch during review, run `git fetch origin` and `git switch --track origin/feat/premium-dashboard` once the branch is on GitHub.
 
 3. Create and activate an isolated environment, then install the libraries.
 
@@ -29,7 +29,7 @@
    python -m streamlit run app.py --browser.gatherUsageStats false
    ```
 
-   Open [localhost:8501](http://localhost:8501) and pick a borough. Check how the three charts and request count respond. Press **Control+C** to stop Streamlit.
+   Open [localhost:8501](http://localhost:8501), select **Request explorer**, and pick a borough. Check how the charts and request count respond. Press **Control+C** to stop Streamlit.
 
 5. Run the automated tests from the repository root.
 
@@ -45,6 +45,14 @@
 4. **Explore.** Streamlit reads the database and reruns the dashboard code when you change a filter. Pandas counts categories and boroughs and groups requests by day. The dashboard uses a read-only connection, so filtering has no effect on stored data.
 
 Logs explain what each ETL run did. Errors produce a nonzero exit code that a shell or future scheduler can detect. Git ignores the virtual environment and generated database because those are local artifacts.
+
+## Read the dashboard like an analyst
+
+The overview shows the size and date range of your local sample. Explorer filters change the requests included in the charts and table. For example, the share for a complaint category is its number of stored requests divided by the number of requests in the current chart selection.
+
+Creation time describes when people opened requests. The latest stored source update describes when NYC Open Data last modified one of your stored rows. The pipeline's last successful run tells you when your ETL finished, and its checkpoint tells you how far it scanned. These can differ when a run checks a historical window or finds no changes.
+
+The Insights section compares two weeks only when both have stored requests on all seven dates and enough rows for the dashboard's minimum-count rule. It excludes the first and last observed dates, which can be partial. A difference describes the collection. The dashboard has no way to tell whether an unobserved date had zero NYC requests, and the week comparison does not test statistical significance.
 
 ## How the next run knows where to start
 

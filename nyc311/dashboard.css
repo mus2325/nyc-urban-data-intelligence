@@ -1,0 +1,124 @@
+:root {
+    color-scheme: dark;
+}
+.stApp {
+    background: radial-gradient(ellipse at 88% 0%, #142745 0%, #0b111d 47rem);
+}
+[data-testid="stHeader"] {
+    background: #0b111de8;
+}
+[data-testid="stMainBlockContainer"] {
+    max-width: 84rem;
+    padding: 4.4rem clamp(1rem, 4vw, 3.75rem) 3rem;
+}
+.nyc-hero {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 1.5rem;
+    padding: clamp(1.25rem, 4vw, 3rem);
+    border: 1px solid #334a69;
+    border-radius: 1.25rem;
+    background: linear-gradient(112deg, #122236, #10243b 56%, #153252);
+    overflow: hidden;
+}
+.nyc-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: linear-gradient(#88b4ed15 1px, transparent 1px),
+                      linear-gradient(90deg, #88b4ed15 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: linear-gradient(90deg, transparent 26%, black);
+}
+.nyc-eyebrow {
+    color: #72f0dc;
+    letter-spacing: .15em;
+    font-size: .76rem;
+    font-weight: 750;
+    margin: 0 0 .55rem;
+}
+.nyc-hero h1 {
+    font-size: clamp(2rem, 5vw, 3.55rem);
+    line-height: 1.05;
+    letter-spacing: -.045em;
+    padding: 0;
+    margin: 0 0 .75rem;
+    color: #f4f8ff;
+}
+.nyc-hero-copy > p:last-child {
+    color: #bbcee5;
+    margin: 0;
+}
+.nyc-source {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: .25rem;
+    border: 1px solid #416080;
+    background: #101e31;
+    border-radius: .85rem;
+    padding: .85rem 1rem;
+    color: #bdcce0;
+    font-size: .83rem;
+    font-variant-numeric: tabular-nums;
+}
+.nyc-source strong {
+    color: #eef5ff;
+}
+.nyc-status {
+    font-size: .74rem;
+    font-weight: 750;
+    border-radius: 999px;
+    background: #25354d;
+    color: #d2dff2;
+    padding: .15rem .55rem;
+    margin-bottom: .2rem;
+}
+.nyc-status.recent { background: #123c3f; color: #80f0dd; }
+.nyc-status.caution { background: #48351f; color: #ffdb9d; }
+[data-testid="stVerticalBlockBorderWrapper"] > div,
+[data-testid="stMetric"] {
+    border-color: #2b3c55;
+}
+[data-testid="stMetric"] {
+    background: linear-gradient(140deg, #18273b, #131d2e);
+    border-radius: .85rem;
+    height: 100%;
+}
+[data-testid="stMetricValue"] {
+    font-size: clamp(1.35rem, 3vw, 2.1rem);
+    font-variant-numeric: tabular-nums;
+    color: #eef7ff;
+}
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p { color: #afc1d8; opacity: 1; }
+[data-testid="stCaptionContainer"] a { color: #80b9ff; }
+.st-key-dashboard-section [role="radiogroup"] {
+    gap: .3rem .8rem;
+    flex-wrap: wrap;
+    padding: .3rem .65rem;
+    border: 1px solid #2b3c55;
+    border-radius: .85rem;
+    background: #111d2d;
+}
+:where(button, input, summary):focus-visible,
+[data-baseweb="radio"]:focus-within {
+    outline: 2px solid #75b9ff;
+    outline-offset: 3px;
+}
+@media (max-width: 700px) {
+    .nyc-hero { grid-template-columns: 1fr; }
+    .nyc-source { justify-self: start; }
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: .6rem; }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+    .st-key-overview-kpis [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 calc(50% - .6rem);
+    }
+}
