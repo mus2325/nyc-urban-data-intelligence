@@ -14,7 +14,22 @@ python -m nyc311.etl --page-size 1000
 python -m streamlit run app.py --browser.gatherUsageStats false
 ```
 
-Open [localhost:8501](http://localhost:8501). Filter by creation date, borough, or complaint category to explore the top complaint categories, borough counts, and daily trends. Stop Streamlit with **Control+C**. Re-run the ETL and reload the page to see newly collected records.
+Open [localhost:8501](http://localhost:8501). Run the ETL again and reload the page to see newly committed records. The dashboard reads SQLite only and makes no live NYC Open Data requests. Stop Streamlit with **Control+C**.
+
+## Dashboard walkthrough
+
+| View | What it shows |
+| --- | --- |
+| **Executive overview** | Collected requests, distinct categories, represented boroughs, observed dates, and the stored creation-date range. The header shows the latest stored source update. |
+| **Request explorer** | Combine date, borough, and complaint filters. Inspect daily trends, category and borough counts, and up to 250 matching records. |
+| **Pipeline health** | The last successful run, scanned-through checkpoint, and committed quality counts. V1 databases can still display requests, and V2-only metadata appears when it becomes available. |
+| **Insights** | The most recorded categories and boroughs, their shares of the applicable sample, and a descriptive seven-day comparison where the data supports one. |
+
+For a portfolio screenshot, load your own NYC 311 data and capture the overview with its source freshness and sample disclosure visible. Open the explorer to show a selected borough, then open pipeline health to show the checkpoint and quality counts. Each chart has a table for reading exact values without relying on a pointer or color.
+
+Creation dates use NYC local time. Source updates, ingestion runs, and checkpoints are shown in UTC. The dashboard flags a stored source update or successful run as stale after 24 hours. A successful run can cover a historical or empty window. V2 retains the scan end but does not store the scan start.
+
+The collection may be incomplete and may not represent citywide demand. Trends break where dates contain no stored requests. The week comparison uses two adjacent seven-day periods with observations on every date, ignores the two outer observed boundary dates, and requires at least 20 requests per period. This compares stored counts without estimating statistical significance or assuming complete daily coverage.
 
 The database lives at `data/nyc311.sqlite3`. An existing V1 database gets upgraded automatically, with its records and dashboard preserved. `--page-size` accepts 1 to 5,000 rows per request. The ETL reads as many pages as the window needs.
 
@@ -51,7 +66,9 @@ flowchart LR
 | `nyc311/transform.py` | Validates required fields, normalizes boroughs, and deduplicates the sample. |
 | `nyc311/storage.py` | Upserts records and saves a checkpoint in one transaction. Exposes read-only dashboard queries. |
 | `nyc311/etl.py` | Runs the stages in order, logs record counts and failures, and returns a nonzero exit code on failure. |
-| `app.py` | Reads SQLite and renders filters and charts. |
+| `app.py` | Loads one read-only snapshot and routes between dashboard views. |
+| `nyc311/dashboard_data.py` | Reads requests and available V2 metadata from the same SQLite snapshot. |
+| `nyc311/analytics.py` and `nyc311/dashboard_views.py` | Calculate sample statistics and render the dashboard. |
 
 ## How this maps to AWS
 
@@ -72,7 +89,7 @@ The application runs locally. These AWS services illustrate how the design could
 python -m unittest discover -v
 ```
 
-All 21 tests passed in the development environment. They cover a simulated 5,638-row burst with a shared modification timestamp, bounded page processing, retries, interruption and restart, repeated runs, and checkpoint rollback. They mock HTTP and use temporary databases.
+The unittest suite covers dashboard calculations, V1 and V2 display, empty and stale data, and a simulated 5,638-row burst with a shared modification timestamp, bounded page processing, retries, interruption and restart, repeated runs, and checkpoint rollback. They mock HTTP and use temporary databases.
 
 ### Validate a live page or historical window
 
